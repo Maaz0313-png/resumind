@@ -6,6 +6,7 @@ import {useNavigate} from "react-router";
 import {convertPdfToImage} from "~/lib/pdf2img";
 import {generateUUID} from "~/lib/utils";
 import {prepareInstructions} from "../../constants";
+import {parseAIFeedback} from "~/lib/json-validator";
 
 const Upload = () => {
     const { auth, isLoading, fs, ai, kv } = usePuterStore();
@@ -68,35 +69,20 @@ const Upload = () => {
             ? feedback.message.content
             : feedback.message.content[0].text;
 
-        // Clean the feedback text to extract JSON from markdown code blocks
-        let cleanedFeedback = feedbackText.trim();
+        // Parse AI feedback using comprehensive utility
+        const parseResult = parseAIFeedback(feedbackText);
         
-        // Remove markdown code block formatting if present
-        if (cleanedFeedback.startsWith('```json')) {
-            cleanedFeedback = cleanedFeedback.replace(/^```json\s*/, '').replace(/\s*```$/, '');
-        } else if (cleanedFeedback.startsWith('```')) {
-            cleanedFeedback = cleanedFeedback.replace(/^```\s*/, '').replace(/\s*```$/, '');
-        }
-        
-        try {
-            data.feedback = JSON.parse(cleanedFeedback);
-        } catch (parseError) {
-            console.error('Failed to parse feedback as JSON:', parseError);
+        if (parseResult.success && parseResult.feedback) {
+            data.feedback = parseResult.feedback;
+            console.log(`Successfully parsed feedback using method: ${parseResult.method}`);
+        } else {
+            console.error('Failed to parse AI feedback:', parseResult.error);
             console.log('Raw feedback text:', feedbackText);
-            console.log('Cleaned feedback text:', cleanedFeedback);
             
-            // Fallback: try to extract JSON from the text using regex
-            const jsonMatch = cleanedFeedback.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                try {
-                    data.feedback = JSON.parse(jsonMatch[0]);
-                } catch (secondParseError) {
-                    console.error('Failed to parse extracted JSON:', secondParseError);
-                    return handleError('Error: Failed to parse AI feedback');
-                }
-            } else {
-                return handleError('Error: No valid JSON found in AI feedback');
-            }
+            // Use fallback feedback structure but still save raw response for debugging
+            data.feedback = parseResult.feedback; // This will be the fallback structure
+            await kv.set(`resume:${uuid}:raw_feedback`, feedbackText);
+            console.warn('Using fallback feedback structure due to parsing failure');
         }
         await kv.set(`resume:${uuid}`, JSON.stringify(data));
         setStatusText('Analysis complete, redirecting...');

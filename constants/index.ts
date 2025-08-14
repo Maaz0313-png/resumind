@@ -235,7 +235,17 @@ export const prepareInstructions = ({jobTitle, jobDescription}: { jobTitle: stri
       If provided, take the job description into consideration.
       The job title is: ${jobTitle}
       The job description is: ${jobDescription}
+      
+      CRITICAL INSTRUCTIONS FOR JSON OUTPUT:
+      - Return ONLY a valid JSON object
+      - Do NOT include markdown code blocks (no ``` or ```json)
+      - Do NOT include any explanatory text before or after the JSON
+      - Ensure all strings are properly quoted with double quotes
+      - Ensure all objects and arrays are properly closed with matching braces/brackets
+      - Do NOT include trailing commas
+      - All tip explanations must be properly escaped strings
+      
       Provide the feedback using the following format:
       ${AIResponseFormat}
-      Return the analysis as an JSON object, without any other text and without the backticks.
-      Do not include any other text or comments.`;
+      
+      Return ONLY the JSON object with no additional text, comments, or formatting.`;
