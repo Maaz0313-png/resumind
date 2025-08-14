@@ -23,71 +23,99 @@ const Upload = () => {
         setIsProcessing(true);
         
         const handleError = (errorMessage: string) => {
+            console.error('Upload error:', errorMessage);
             setStatusText(errorMessage);
             setTimeout(() => {
                 setIsProcessing(false);
                 setStatusText('');
-            }, 3000);
+            }, 5000); // Show error for 5 seconds
         };
 
-        setStatusText('Uploading the file...');
-        const uploadedFile = await fs.upload([file]);
-        if(!uploadedFile) return handleError('Error: Failed to upload file');
+        try {
+            setStatusText('Uploading the file...');
+            const uploadedFile = await fs.upload([file]);
+            if(!uploadedFile) {
+                return handleError('Error: Failed to upload file - please check your connection and try again');
+            }
 
-        setStatusText('Converting to image...');
-        const imageFile = await convertPdfToImage(file);
-        if(!imageFile.file) {
-            const errorMsg = imageFile.error || 'Failed to convert PDF to image';
-            console.error('PDF conversion failed:', errorMsg);
-            return handleError(`Error: ${errorMsg}`);
-        }
+            setStatusText('Converting to image...');
+            const imageFile = await convertPdfToImage(file);
+            if(!imageFile.file) {
+                const errorMsg = imageFile.error || 'Failed to convert PDF to image';
+                console.error('PDF conversion failed:', errorMsg);
+                return handleError(`Error: ${errorMsg}`);
+            }
 
-        setStatusText('Uploading the image...');
-        const uploadedImage = await fs.upload([imageFile.file]);
-        if(!uploadedImage) return handleError('Error: Failed to upload image');
+            setStatusText('Uploading the image...');
+            const uploadedImage = await fs.upload([imageFile.file]);
+            if(!uploadedImage) {
+                return handleError('Error: Failed to upload converted image - please try again');
+            }
 
-        setStatusText('Preparing data...');
-        const uuid = generateUUID();
-        const data = {
-            id: uuid,
-            resumePath: uploadedFile.path,
-            imagePath: uploadedImage.path,
-            companyName, jobTitle, jobDescription,
-            feedback: '',
-        }
-        await kv.set(`resume:${uuid}`, JSON.stringify(data));
-
-        setStatusText('Analyzing...');
-
-        const feedback = await ai.feedback(
-            uploadedFile.path,
-            prepareInstructions({ jobTitle, jobDescription })
-        )
-        if (!feedback) return handleError('Error: Failed to analyze resume');
-
-        const feedbackText = typeof feedback.message.content === 'string'
-            ? feedback.message.content
-            : feedback.message.content[0].text;
-
-        // Parse AI feedback using comprehensive utility
-        const parseResult = parseAIFeedback(feedbackText);
-        
-        if (parseResult.success && parseResult.feedback) {
-            data.feedback = parseResult.feedback;
-            console.log(`Successfully parsed feedback using method: ${parseResult.method}`);
-        } else {
-            console.error('Failed to parse AI feedback:', parseResult.error);
-            console.log('Raw feedback text:', feedbackText);
+            setStatusText('Preparing data...');
+            const uuid = generateUUID();
+            const data = {
+                id: uuid,
+                resumePath: uploadedFile.path,
+                imagePath: uploadedImage.path,
+                companyName, jobTitle, jobDescription,
+                feedback: '',
+            }
             
-            // Use fallback feedback structure but still save raw response for debugging
-            data.feedback = parseResult.feedback; // This will be the fallback structure
-            await kv.set(`resume:${uuid}:raw_feedback`, feedbackText);
-            console.warn('Using fallback feedback structure due to parsing failure');
+            const kvSetResult = await kv.set(`resume:${uuid}`, JSON.stringify(data));
+            if (!kvSetResult) {
+                return handleError('Error: Failed to save data - please try again');
+            }
+
+            setStatusText('Analyzing with AI...');
+            const feedback = await ai.feedback(
+                uploadedFile.path,
+                prepareInstructions({ jobTitle, jobDescription })
+            );
+            
+            if (!feedback) {
+                return handleError('Error: AI analysis failed - please try again later');
+            }
+
+            const feedbackText = typeof feedback.message.content === 'string'
+                ? feedback.message.content
+                : feedback.message.content[0].text;
+
+            // Parse AI feedback using comprehensive utility
+            const parseResult = parseAIFeedback(feedbackText);
+            
+            if (parseResult.success && parseResult.feedback) {
+                data.feedback = parseResult.feedback;
+                console.log(`Successfully parsed feedback using method: ${parseResult.method}`);
+            } else {
+                console.error('Failed to parse AI feedback:', parseResult.error);
+                console.log('Raw feedback text:', feedbackText);
+                
+                // Use fallback feedback structure but still save raw response for debugging
+                data.feedback = parseResult.feedback; // This will be the fallback structure
+                try {
+                    await kv.set(`resume:${uuid}:raw_feedback`, feedbackText);
+                } catch (saveError) {
+                    console.warn('Failed to save raw feedback for debugging:', saveError);
+                }
+                console.warn('Using fallback feedback structure due to parsing failure');
+            }
+            
+            // Final save with processed feedback
+            const finalSave = await kv.set(`resume:${uuid}`, JSON.stringify(data));
+            if (!finalSave) {
+                console.warn('Failed to save final data, but proceeding with navigation');
+            }
+            
+            setStatusText('Analysis complete, redirecting...');
+            console.log('Analysis completed successfully:', data);
+            navigate(`/resume/${uuid}`);
+            
+        } catch (error) {
+            console.error('Unexpected error during analysis:', error);
+            const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
+            handleError(`Unexpected error: ${errorMessage}`);
         }
-        await kv.set(`resume:${uuid}`, JSON.stringify(data));
-        setStatusText('Analysis complete, redirecting...');
-        console.log(data);
-        navigate(`/resume/${uuid}`);
     }
 
     const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
