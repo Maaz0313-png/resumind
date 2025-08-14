@@ -238,7 +238,7 @@ export const prepareInstructions = ({jobTitle, jobDescription}: { jobTitle: stri
       
       CRITICAL INSTRUCTIONS FOR JSON OUTPUT:
       - Return ONLY a valid JSON object
-      - Do NOT include markdown code blocks (no ``` or ```json)
+      - Do NOT include markdown code blocks (no backticks)
       - Do NOT include any explanatory text before or after the JSON
       - Ensure all strings are properly quoted with double quotes
       - Ensure all objects and arrays are properly closed with matching braces/brackets
