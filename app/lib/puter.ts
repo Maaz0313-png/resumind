@@ -191,7 +191,7 @@ export const usePuterStore = create<PuterStore>((set, get) => {
             chat: (prompt, options) => safeApiCall(() => getPuter().ai.chat(prompt, options)),
             feedback: (path, message) => safeApiCall(() => getPuter().ai.chat([
                 { role: "user", content: [{ type: "file", puter_path: path }, { type: "text", text: message }] }
-            ], { model: "claude-3-sonnet-20240229" })),
+            ], { model: "claude-sonnet-4-latest" })),
             img2txt: (image) => safeApiCall(() => getPuter().ai.img2txt(image)),
         },
         kv: {
